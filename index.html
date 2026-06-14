@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Hassan · Futuristic Nexus Chat | Realtime</title>
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 30%, #0a0f1e, #000000);
+            font-family: 'Inter', 'Segoe UI', 'Orbitron', 'Poppins', system-ui, -apple-system, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* FLYING PARTICLE CANVAS (boiling / rising particles) */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.75;
+        }
+
+        /* main glassmorphic chat container */
+        .chat-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 1100px;
+            height: 85vh;
+            background: rgba(0, 0, 0, 0.58);
+            backdrop-filter: blur(16px);
+            border-radius: 2rem;
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 255, 255, 0.15);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .chat-header {
+            padding: 1rem 1.8rem;
+            background: rgba(0, 0, 0, 0.7);
+            border-bottom: 1px solid rgba(0, 255, 255, 0.4);
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            font-size: 1.7rem;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #0ff, #f0f);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 5px rgba(0,255,255,0.5);
+        }
+
+        .badge {
+            background: rgba(0, 255, 255, 0.15);
+            backdrop-filter: blur(4px);
+            padding: 0.3rem 1rem;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            font-family: monospace;
+            color: #0ff;
+            border: 1px solid #0ff3;
+        }
+
+        /* login overlay */
+        .login-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(20px);
+            z-index: 30;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 2rem;
+        }
+
+        .login-card {
+            background: rgba(10, 20, 30, 0.8);
+            border: 1px solid #0ff;
+            border-radius: 2rem;
+            padding: 2rem 2.2rem;
+            width: 90%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+        }
+
+        .login-card h2 {
+            font-family: 'Orbitron', monospace;
+            color: #0ff;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .login-card input {
+            width: 100%;
+            padding: 14px 18px;
+            background: #11181f;
+            border: 1px solid #2c5f6b;
+            border-radius: 60px;
+            color: white;
+            font-size: 1rem;
+            margin: 12px 0;
+            outline: none;
+            transition: 0.2s;
+            font-family: monospace;
+        }
+
+        .login-card input:focus {
+            border-color: #0ff;
+            box-shadow: 0 0 12px #0ff3;
+        }
+
+        .login-card button {
+            background: linear-gradient(95deg, #0c2b36, #0a1a22);
+            border: 1px solid #0ff;
+            color: #0ff;
+            padding: 12px 20px;
+            width: 100%;
+            border-radius: 60px;
+            font-weight: bold;
+            font-family: 'Orbitron', monospace;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 8px;
+        }
+
+        .login-card button:hover {
+            background: #0ff2;
+            box-shadow: 0 0 12px #0ff;
+            color: white;
+        }
+
+        .error-msg {
+            color: #ff4d6d;
+            font-size: 0.8rem;
+            margin-top: 12px;
+            font-family: monospace;
+        }
+
+        /* messages area */
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            scroll-behavior: smooth;
+        }
+
+        .messages-area::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .messages-area::-webkit-scrollbar-track {
+            background: #0a0f1e;
+        }
+
+        .messages-area::-webkit-scrollbar-thumb {
+            background: #0ff;
+            border-radius: 10px;
+        }
+
+        .message {
+            max-width: 70%;
+            display: flex;
+            flex-direction: column;
+            animation: fadeSlideUp 0.25s ease-out;
+        }
+
+        .message.left {
+            align-items: flex-start;
+            align-self: flex-start;
+        }
+
+        .message.right {
+            align-items: flex-end;
+            align-self: flex-end;
+        }
+
+        .bubble {
+            padding: 12px 18px;
+            border-radius: 24px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+            background: rgba(25, 35, 50, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            font-family: 'Segoe UI', 'Inter', system-ui;
+            color: #eef5ff;
+        }
+
+        .message.left .bubble {
+            background: rgba(0, 20, 30, 0.85);
+            border-bottom-left-radius: 6px;
+            border-left: 3px solid #0ff;
+            box-shadow: -2px 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .message.right .bubble {
+            background: rgba(0, 30, 50, 0.9);
+            border-bottom-right-radius: 6px;
+            border-right: 3px solid #f0f;
+            box-shadow: 2px 4px 12px rgba(0,0,0,0.3);
+            color: #ffffff;
+        }
+
+        .sender-name {
+            font-size: 0.7rem;
+            font-family: monospace;
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+            color: #0ff;
+        }
+
+        .message.left .sender-name {
+            color: #2cc9ff;
+            margin-left: 6px;
+        }
+
+        .message.right .sender-name {
+            color: #ff66cc;
+            margin-right: 6px;
+        }
+
+        .timestamp {
+            font-size: 0.6rem;
+            opacity: 0.6;
+            margin-top: 4px;
+            font-family: monospace;
+            margin-left: 8px;
+            margin-right: 8px;
+        }
+
+        .input-area {
+            padding: 1rem 1.5rem 1.5rem;
+            background: rgba(0, 0, 0, 0.6);
+            border-top: 1px solid rgba(0, 255, 255, 0.3);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .input-area input {
+            flex: 1;
+            background: #0b111c;
+            border: 1px solid #2c6b6e;
+            padding: 14px 20px;
+            border-radius: 60px;
+            color: #e0f2fe;
+            font-size: 1rem;
+            font-family: monospace;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .input-area input:focus {
+            border-color: #0ff;
+            box-shadow: 0 0 8px #0ff6;
+        }
+
+        .input-area button {
+            background: #111c28;
+            border: none;
+            padding: 12px 22px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-family: 'Orbitron', monospace;
+            color: #0ff;
+            border: 1px solid #0ff;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .input-area button:hover {
+            background: #0ff2;
+            color: white;
+            box-shadow: 0 0 10px #0ff;
+        }
+
+        .connection-status {
+            font-size: 0.65rem;
+            margin-left: 12px;
+            background: #00000066;
+            padding: 2px 8px;
+            border-radius: 20px;
+            color: #0fa;
+        }
+
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .message {
+                max-width: 85%;
+            }
+            .logo {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="particle-canvas"></canvas>
+
+<div class="chat-container" id="chatApp">
+    <div class="chat-header">
+        <div class="logo">⟁ HASSAN · NEXUS ⟁</div>
+        <div class="badge" id="activeUserBadge">⚡ SYNAPSE REALITY</div>
+        <div class="connection-status" id="connStatus">● connecting</div>
+    </div>
+
+    <div class="messages-area" id="messagesContainer">
+        <div style="text-align:center; opacity:0.6; font-family:monospace; font-size:0.75rem; margin-top: 20px;">
+            ✦ ENCRYPTED QUANTUM CHANNEL ✦
+        </div>
+    </div>
+
+    <div class="input-area" id="chatInputSection" style="display: none;">
+        <input type="text" id="messageInput" placeholder="Transmit message..." autocomplete="off">
+        <button id="sendBtn">⟁ SEND</button>
+    </div>
+
+    <!-- login overlay -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-card">
+            <h2>⌾ AUTHENTICATE ⌾</h2>
+            <input type="password" id="passwordInput" placeholder="Enter your access passkey" autocomplete="off">
+            <button id="loginBtn">⤚ UNLOCK CHAT ⤚</button>
+            <div id="loginError" class="error-msg"></div>
+            <div style="margin-top: 20px; font-size: 0.7rem; color: #4f9faa;">※ Hassan / Haider ※</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- SUPABASE CONFIGURATION (PUBLIC KEYS - REPLACE WITH YOUR OWN FOR PRODUCTION) ----------
+    // NOTE: For demo purposes, these are example keys. For real deployment, create a Supabase project and replace.
+    // To make this fully functional, you need to create a Supabase project, then create a table "messages"
+    // with columns: id (uuid primary key), text (text), sender (text), side (text), timestamp (text), created_at (timestamptz default now())
+    // And enable Realtime on the messages table.
+    const SUPABASE_URL = "https://oaxurpebzhmscauckukw.supabase.co";      // <-- REPLACE WITH YOUR SUPABASE URL
+    const SUPABASE_ANON_KEY = "sb_publishable_wssHZy9TeYkcR_7z0vxvIQ_qe_9Binw";                   // <-- REPLACE WITH YOUR ANON KEY
+    
+    // For DEMO: We'll simulate real-time if keys are missing by using localStorage sync?
+    // But we'll provide instructions and fallback to local mode if keys are default.
+    // However, to ensure seamless experience, we will build a robust realtime handler with error fallback.
+    // But since supabase requires actual project, I'll include a working mock that actually uses BroadcastChannel?
+    // Better: Provide real supabase integration but also allow user to see how to set up.
+    // For this assignment: We'll embed fully functional supabase code, and show alert if keys not set.
+    // But to make the demo work out of the box, we can check if keys are default, then run local simulation realtime.
+    // However I'll make the code ready: if keys are not replaced, we fallback to in-memory realtime with broadcast.
+    
+    let supabaseClient = null;
+    let realtimeSubscription = null;
+    let useSupabase = false;
+    let localSyncInterval = null;
+    
+    // Initialize Supabase only if valid URL & key provided
+    const isSupabaseConfigured = () => {
+        return SUPABASE_URL && SUPABASE_URL !== "https://your-project.supabase.co" && 
+               SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "your-anon-key";
+    };
+    
+    if (isSupabaseConfigured()) {
+        try {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            useSupabase = true;
+            document.getElementById('connStatus').innerHTML = '● realtime active';
+            document.getElementById('connStatus').style.color = '#0f0';
+        } catch(e) {
+            console.warn("Supabase init failed", e);
+            useSupabase = false;
+        }
+    }
+    
+    if (!useSupabase) {
+        console.log("⚠️ Supabase not configured. Running local realtime simulation using BroadcastChannel (works across tabs on same origin).");
+        document.getElementById('connStatus').innerHTML = '⚡ local mode';
+        document.getElementById('connStatus').style.color = '#ffaa44';
+    }
+    
+    // ---------- USER CREDENTIALS ----------
+    const USER_HASSAN = { password: "Hassan", identity: "Hassan", side: "right" };
+    const USER_HAIDER = { password: "Haider", identity: "Haider", side: "left" };
+    
+    // ---------- APP STATE ----------
+    let currentUser = null;
+    let messages = [];
+    
+    // DOM elements
+    const messagesContainer = document.getElementById('messagesContainer');
+    const loginOverlay = document.getElementById('loginOverlay');
+    const chatInputSection = document.getElementById('chatInputSection');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginError = document.getElementById('loginError');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const activeUserBadge = document.getElementById('activeUserBadge');
+    
+    // Helper: Render messages
+    function renderMessages() {
+        if (!messagesContainer) return;
+        messagesContainer.innerHTML = '';
+        
+        if (messages.length === 0) {
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'empty-placeholder';
+            emptyDiv.style.textAlign = 'center';
+            emptyDiv.style.opacity = '0.5';
+            emptyDiv.style.fontFamily = 'monospace';
+            emptyDiv.style.marginTop = '2rem';
+            emptyDiv.style.fontSize = '0.8rem';
+            emptyDiv.innerHTML = '✦ No messages yet. Start the conversation. ✦';
+            messagesContainer.appendChild(emptyDiv);
+        } else {
+            messages.forEach(msg => {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `message ${msg.side}`;
+                
+                const senderSpan = document.createElement('div');
+                senderSpan.className = 'sender-name';
+                senderSpan.innerText = msg.sender;
+                
+                const bubbleDiv = document.createElement('div');
+                bubbleDiv.className = 'bubble';
+                bubbleDiv.innerText = msg.text;
+                
+                const timeSpan = document.createElement('div');
+                timeSpan.className = 'timestamp';
+                timeSpan.innerText = msg.timestamp;
+                
+                msgDiv.appendChild(senderSpan);
+                msgDiv.appendChild(bubbleDiv);
+                msgDiv.appendChild(timeSpan);
+                messagesContainer.appendChild(msgDiv);
+            });
+        }
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    // Add message to local state and render
+    function addMessageToLocal(text, sender, side, timestamp = null) {
+        if (!text.trim()) return;
+        const timeStr = timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute:'2-digit', second:'2-digit' });
+        const newMsg = {
+            text: text.trim(),
+            sender: sender,
+            side: side,
+            timestamp: timeStr
+        };
+        messages.push(newMsg);
+        renderMessages();
+    }
+    
+    // Send message to supabase (or local sync)
+    async function sendMessageToBackend(text, sender, side) {
+        if (!text.trim()) return;
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute:'2-digit', second:'2-digit' });
+        
+        if (useSupabase && supabaseClient) {
+            try {
+                const { error } = await supabaseClient
+                    .from('messages')
+                    .insert([{ text: text.trim(), sender, side, timestamp }]);
+                if (error) console.error("Supabase insert error", error);
+            } catch(e) { console.error(e); }
+        } else {
+            // local broadcast to other tabs/windows
+            const broadcastChannel = new BroadcastChannel('hassan_nexus_chat');
+            broadcastChannel.postMessage({ type: 'NEW_MESSAGE', payload: { text: text.trim(), sender, side, timestamp } });
+            broadcastChannel.close();
+        }
+    }
+    
+    // Send message from current user
+    async function sendCurrentUserMessage() {
+        if (!currentUser) return;
+        const rawText = messageInput.value;
+        if (!rawText.trim()) return;
+        
+        // Add locally optimistic
+        addMessageToLocal(rawText, currentUser.identity, currentUser.side);
+        await sendMessageToBackend(rawText, currentUser.identity, currentUser.side);
+        messageInput.value = '';
+        messageInput.focus();
+    }
+    
+    // Load initial messages from Supabase
+    async function loadMessagesFromSupabase() {
+        if (!useSupabase || !supabaseClient) return;
+        try {
+            const { data, error } = await supabaseClient
+                .from('messages')
+                .select('*')
+                .order('created_at', { ascending: true });
+            if (error) throw error;
+            if (data && data.length) {
+                messages = [];
+                data.forEach(row => {
+                    messages.push({
+                        text: row.text,
+                        sender: row.sender,
+                        side: row.side,
+                        timestamp: row.timestamp
+                    });
+                });
+                renderMessages();
+            }
+        } catch(e) { console.warn("Failed to load messages", e); }
+    }
+    
+    // Setup realtime subscription
+    function setupRealtimeSubscription() {
+        if (!useSupabase || !supabaseClient) return;
+        realtimeSubscription = supabaseClient
+            .channel('messages-realtime')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                const newMsg = payload.new;
+                if (newMsg && newMsg.sender !== currentUser?.identity) {
+                    addMessageToLocal(newMsg.text, newMsg.sender, newMsg.side, newMsg.timestamp);
+                } else if (newMsg && newMsg.sender === currentUser?.identity) {
+                    // Already added via optimistic send, but avoid duplicate? We can skip if timestamp is identical quickly.
+                    // To avoid duplication, we check last message.
+                    const lastMsg = messages[messages.length-1];
+                    if (!lastMsg || lastMsg.text !== newMsg.text || lastMsg.sender !== newMsg.sender) {
+                        addMessageToLocal(newMsg.text, newMsg.sender, newMsg.side, newMsg.timestamp);
+                    }
+                }
+            })
+            .subscribe();
+    }
+    
+    // Local sync using BroadcastChannel (for non-supabase multi-tab)
+    function setupLocalSync() {
+        if (useSupabase) return;
+        const broadcastChannel = new BroadcastChannel('hassan_nexus_chat');
+        broadcastChannel.onmessage = (event) => {
+            if (event.data.type === 'NEW_MESSAGE') {
+                const { text, sender, side, timestamp } = event.data.payload;
+                if (sender !== currentUser?.identity) {
+                    addMessageToLocal(text, sender, side, timestamp);
+                }
+            }
+        };
+        window.addEventListener('beforeunload', () => {
+            broadcastChannel.close();
+        });
+    }
+    
+    // Login logic
+    function attemptLogin(password) {
+        const trimmedPass = password.trim();
+        if (trimmedPass === USER_HASSAN.password) {
+            currentUser = { identity: USER_HASSAN.identity, side: USER_HASSAN.side };
+            return true;
+        } else if (trimmedPass === USER_HAIDER.password) {
+            currentUser = { identity: USER_HAIDER.identity, side: USER_HAIDER.side };
+            return true;
+        }
+        return false;
+    }
+    
+    async function finalizeLogin() {
+        if (!currentUser) return;
+        loginOverlay.style.display = 'none';
+        chatInputSection.style.display = 'flex';
+        const userRole = currentUser.identity === 'Hassan' ? '⚡ HASSAN (right channel)' : '🌀 HAIDER (left channel)';
+        activeUserBadge.innerHTML = `⟁ ${userRole} ⟁`;
+        
+        // Load messages from supabase or initialize empty
+        if (useSupabase) {
+            await loadMessagesFromSupabase();
+            setupRealtimeSubscription();
+        } else {
+            if (messages.length === 0) {
+                addMessageToLocal("✦ Welcome to Nexus Chat (local mode). Messages sync across tabs. ✦", "system", currentUser.side);
+            }
+            setupLocalSync();
+        }
+        
+        messageInput.focus();
+    }
+    
+    // Event listeners for login
+    loginBtn.addEventListener('click', async () => {
+        const enteredPass = passwordInput.value;
+        if (attemptLogin(enteredPass)) {
+            loginError.innerText = '';
+            await finalizeLogin();
+        } else {
+            loginError.innerText = '❌ Access denied. Invalid passkey. Use "Hassan" or "Haider".';
+            passwordInput.value = '';
+            passwordInput.focus();
+        }
+    });
+    
+    passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loginBtn.click();
+    });
+    
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && currentUser) sendCurrentUserMessage();
+    });
+    
+    sendBtn.addEventListener('click', () => {
+        if (currentUser) sendCurrentUserMessage();
+    });
+    
+    // ---------- FUTURISTIC PARTICLE ANIMATION (boiling particles) ----------
+    const canvas = document.getElementById('particle-canvas');
+    let ctx = canvas.getContext('2d');
+    let particles = [];
+    let animationId = null;
+    let canvasWidth, canvasHeight;
+    
+    function initCanvas() {
+        canvasWidth = window.innerWidth;
+        canvasHeight = window.innerHeight;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+    }
+    
+    class Particle {
+        constructor(x, y, size, speedY, drift) {
+            this.x = x;
+            this.y = y;
+            this.size = size;
+            this.baseSpeedY = speedY;
+            this.speedY = speedY;
+            this.drift = drift;
+            this.angle = Math.random() * Math.PI * 2;
+            this.opacity = 0.4 + Math.random() * 0.6;
+            this.color = `hsl(${170 + Math.random() * 40}, 100%, 65%)`;
+        }
+        update() {
+            this.speedY = this.baseSpeedY + (Math.sin(Date.now() * 0.005 + this.x) * 0.08);
+            this.y += this.speedY;
+            this.angle += 0.02;
+            this.x += Math.sin(this.angle) * this.drift;
+            if (this.y + this.size < 0) {
+                this.y = canvasHeight + Math.random() * 40;
+                this.x = Math.random() * canvasWidth;
+                this.baseSpeedY = -(1.2 + Math.random() * 2.5);
+                this.drift = 0.2 + Math.random() * 1.2;
+                this.size = 1.5 + Math.random() * 4;
+            }
+            if (this.x < -20) this.x = canvasWidth + 10;
+            if (this.x > canvasWidth + 20) this.x = -20;
+        }
+        draw(ctx) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = `rgba(0, 255, 200, 0.7)`;
+            ctx.globalAlpha = this.opacity * 0.9;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(this.x - 0.8, this.y - 0.6, this.size * 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = `white`;
+            ctx.globalAlpha = 0.6;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+        }
+    }
+    
+    function createParticles(count) {
+        const parts = [];
+        for (let i = 0; i < count; i++) {
+            parts.push(new Particle(
+                Math.random() * canvasWidth,
+                Math.random() * canvasHeight,
+                1.5 + Math.random() * 5,
+                -(0.8 + Math.random() * 2.8),
+                0.2 + Math.random() * 1.4
+            ));
+        }
+        return parts;
+    }
+    
+    function animateParticles() {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        const grad = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+        grad.addColorStop(0, '#000000');
+        grad.addColorStop(1, '#03050b');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        for (let p of particles) {
+            p.update();
+            p.draw(ctx);
+        }
+        animationId = requestAnimationFrame(animateParticles);
+    }
+    
+    function resizeCanvasAndReset() {
+        initCanvas();
+        particles = createParticles(150);
+    }
+    
+    window.addEventListener('resize', resizeCanvasAndReset);
+    initCanvas();
+    particles = createParticles(150);
+    animateParticles();
+    
+    // Additional style
+    const style = document.createElement('style');
+    style.textContent = `
+        .message.right .bubble { background: linear-gradient(145deg, #101c2c, #07121e); }
+        .message.left .bubble { background: linear-gradient(145deg, #0a1725, #030d16); }
+        .chat-container { animation: borderPulse 3s infinite alternate; }
+        @keyframes borderPulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.2), 0 25px 45px rgba(0,0,0,0.5); border-color: rgba(0,255,255,0.3);}
+            100% { box-shadow: 0 0 18px 2px rgba(0, 255, 210, 0.3), 0 25px 45px rgba(0,0,0,0.5); border-color: rgba(0,255,200,0.7);}
+        }
+    `;
+    document.head.appendChild(style);
+    
+    if (!useSupabase) {
+        const infoDiv = document.createElement('div');
+        infoDiv.style.position = 'fixed';
+        infoDiv.style.bottom = '10px';
+        infoDiv.style.right = '15px';
+        infoDiv.style.zIndex = '100';
+        infoDiv.style.fontSize = '10px';
+        infoDiv.style.fontFamily = 'monospace';
+        infoDiv.style.color = '#0ff8';
+        infoDiv.style.background = '#000000aa';
+        infoDiv.style.padding = '4px 10px';
+        infoDiv.style.borderRadius = '20px';
+        infoDiv.innerText = '⚡ local realtime (multi-tab) | configure supabase for persistent cloud';
+        document.body.appendChild(infoDiv);
+    } else {
+        const supaNote = document.createElement('div');
+        supaNote.style.position = 'fixed';
+        supaNote.style.bottom = '10px';
+        supaNote.style.right = '15px';
+        supaNote.style.zIndex = '100';
+        supaNote.style.fontSize = '10px';
+        supaNote.style.color = '#0fa';
+        supaNote.style.background = '#000000aa';
+        supaNote.style.padding = '4px 10px';
+        supaNote.style.borderRadius = '20px';
+        supaNote.innerText = '☁️ Supabase Realtime Active';
+        document.body.appendChild(supaNote);
+    }
+</script>
+</body>
+</html>
